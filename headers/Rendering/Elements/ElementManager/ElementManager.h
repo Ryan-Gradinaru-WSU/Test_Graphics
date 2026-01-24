@@ -1,0 +1,6 @@
+class ElementManager{
+private:
+    
+public:
+    
+};
