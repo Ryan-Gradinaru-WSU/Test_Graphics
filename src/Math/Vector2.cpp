@@ -75,7 +75,7 @@ void Vector2::normalize(){
     float magSq = getMagnitudeSquared();
     if(magSq < 1e-8f) 
         return;
-    float invMag = rsqrt(magSq);
+    float invMag = 1/sqrtf(magSq);
     x *= invMag;
     y *= invMag;
 }
@@ -85,7 +85,7 @@ Vector2 Vector2::getNormalized() const{
     float magSq = getMagnitudeSquared();
     if(magSq < 0.000001) 
         return *this;
-    float invMag = rsqrt(magSq);
+    float invMag = 1/sqrtf(magSq);
     return Vector2(x * invMag, y * invMag);
 }
 

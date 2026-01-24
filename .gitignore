@@ -1,0 +1,34 @@
+# Build directory
+/build/
+
+# CMake generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CMakeOutput.log
+CTestTestfile.cmake
+install_manifest.txt
+
+# Visual Studio files
+.vs/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.vcxproj.user
+*.suo
+*.user
+*.VC.db
+*.VC.opendb
+
+# Build artifacts
+*.exe
+*.dll
+*.lib
+*.pdb
+*.obj
+
+# Misc
+/.vscode/tasks.json
+/.vscode/launch.json
+/.vscode/settings.json
+.idea/
