@@ -88,7 +88,7 @@ int main(int argc, char* argv[])
             color_target.load_op = SDL_GPU_LOADOP_CLEAR;
             color_target.store_op = SDL_GPU_STOREOP_STORE;
         
-        SDL_GPUDepthStencilTargetInfo* test_dstarget;
+        SDL_GPUDepthStencilTargetInfo* test_dstarget = nullptr;
 
         SDL_GPURenderPass* test_rp = SDL_BeginGPURenderPass(test_buff, &color_target, 1, test_dstarget);
 

@@ -20,9 +20,11 @@ find_package(SDL3 CONFIG REQUIRED)
 target_link_libraries(app PRIVATE SDL3::SDL3)
 
 # ---------------- Vulkan ----------------
-find_package(Vulkan REQUIRED)
-target_include_directories(app PRIVATE ${Vulkan_INCLUDE_DIRS})
-target_link_libraries(app PRIVATE ${Vulkan_LIBRARIES})
+if (UNIX AND NOT APPLE)
+    find_package(Vulkan REQUIRED)
+    target_include_directories(app PRIVATE ${Vulkan_INCLUDE_DIRS})
+    target_link_libraries(app PRIVATE ${Vulkan_LIBRARIES})
+endif()
 
 # ---------------- SDL3 GPU (optional) ----------------
 # If you have SDL3 GPU installed separately
@@ -31,8 +33,8 @@ target_link_libraries(app PRIVATE ${Vulkan_LIBRARIES})
 #target_include_directories(app PRIVATE ${SDL3_gpu_INCLUDE_DIRS})
 
 #----------------- OPENGL -----------------
-find_package(OpenGL REQUIRED)
-target_link_libraries(app PRIVATE OpenGL::GL dl)
+#find_package(OpenGL REQUIRED)
+#target_link_libraries(app PRIVATE OpenGL::GL dl)
 
 # ---------------- Platform specifics ----------------
 if (WIN32)
