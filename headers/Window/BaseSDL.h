@@ -4,9 +4,11 @@
 
 class BaseSDL
 {
-    SDL_Window * m_window;
-    SDL_Renderer * m_renderer;
+    
 public:
+    //MAKE PRIVATE
+    SDL_Window * m_window;
+
     BaseSDL( Uint32 flags = 0 );
     virtual ~BaseSDL();
     void draw();
