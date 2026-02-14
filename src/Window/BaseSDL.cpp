@@ -106,12 +106,11 @@ void BaseSDL::draw()
     }
     
 
-    SDL_GPUColorTargetInfo color_target = {
-        .texture = backbuffer,
-        .clear_color = (SDL_FColor){1.0f, 0, 1.0f, 1.0f},
-        .load_op = SDL_GPU_LOADOP_CLEAR,
-        .store_op = SDL_GPU_STOREOP_DONT_CARE
-    };
+    SDL_GPUColorTargetInfo color_target{};
+    color_target.texture = backbuffer;
+    color_target.clear_color = {1.0f, 0, 1.0f, 1.0f};
+    color_target.load_op = SDL_GPU_LOADOP_CLEAR;
+    color_target.store_op = SDL_GPU_STOREOP_DONT_CARE;
     
     SDL_GPURenderPass* test_rp = SDL_BeginGPURenderPass(test_cmdbuff, &color_target, 1, NULL);
 
