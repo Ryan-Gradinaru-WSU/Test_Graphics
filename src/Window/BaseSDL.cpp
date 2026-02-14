@@ -15,7 +15,6 @@ BaseSDL::BaseSDL( Uint32 flags )
         throw InitError();
     }
     DEBUG_PRINT("SDL_INIT SUCCESS!");
-    //SDL_Vulkan_LoadLibrary(nullptr);
 
     m_window = SDL_CreateWindow("fortnite", WINDOW_WIDTH, WINDOW_HEIGHT, 0);
     if (!m_window)
@@ -34,7 +33,11 @@ BaseSDL::BaseSDL( Uint32 flags )
     }
     DEBUG_PRINT("GPU DEVICE CREATION SUCCESS!");
 
-    runInitTests();
+    if(!runInitTests()){
+        DEBUG_PRINT("TESTS FAILED!");
+        throw InitError();
+    }
+    
 
     if(!SDL_ClaimWindowForGPUDevice(m_gpuDevice, m_window)){
         throw InitError();
