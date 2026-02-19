@@ -3,6 +3,8 @@
 #include <SDL3/SDL_pixels.h>
 #include <SDL3/SDL_render.h>
 #include <SDL3/SDL_video.h>
+//for dogs
+#include <SDL3_image/SDL_image.h>
 
 #define WINDOW_WIDTH    1280
 #define WINDOW_HEIGHT   800
@@ -43,7 +45,51 @@ BaseSDL::BaseSDL( Uint32 flags )
         throw InitError();
     }
     DEBUG_PRINT("GPU BIND SUCCESS!");
+    //dog start
+    SDL_Surface* surface = IMG_Load("C:/Users/USER/Desktop/WSU/2nd year/CPT_S-322/dogs.png");
+    if (!surface){
+        SDL_Log("Failed to load image: %s", SDL_GetError());
+        throw InitError();
+    }
+    
+    m_dogsW = surface->w;
+    m_dogsH = surface->h;
+    
+    SDL_GPUTextureCreateInfo texinfo{};
+    texinfo.width = m_dogsW;
+    texinfo.height = m_dogsH;
+    texinfo.format = SDL_GPU_TEXTUREFORMAT_RGBA8;
+    texinfo.usage = SDL_GPU_TEXTUREUSAGE_SAMPLED | SDL_GPU_TEXTUREUSAGE_TRANSFER_DST;
+    
+    m_dogsTexture = SDL_CreateGPUTexture(m_gpuDevice, &texinfo);
+    
+    size_t uploadSize = surface->pitch * surface->h;
+    SDL_GPUTransferBufferCreateInfo transferInfo{};
+    transferInfo.size = uploadSize;
+    transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    
+    SDL_GPUTransferBuffer* staging = SDL_CreateGPUTransferBuffer(
+        m_gpuDevice,
+        &transferInfo
+    );
+    
+    void* ptr = SDL_MapGPUTransferBuffer(m_gpuDevice, staging, false);
+    memcpy(ptr, surface->pixels, uploadSize);
+    SDL_UnmapGPUTransferBuffer(m_gpuDevice, staging);
+    
+    SDL_GPUCopyTextureRegion copy{};
+    copy.texture = m_dogsTexture;
+    copy.transfer_buffer = staging;
+    copy.width = m_dogsW;
+    copy.height = m_dogsH;
+    
+    SDL_UploadToGPUTexture(m_gpuDevice, &copy);
+    
+    SDL_DestroySurface(surface);
+    DEBUG_PRINT("DOGS TEXTURE LOAD SUCCESS!");
+    //dog end
 }
+
 
 BaseSDL::~BaseSDL()
 {
@@ -120,6 +166,20 @@ void BaseSDL::draw()
     if(!test_rp){
         throw InitError();
     }
+
+    //dogsStart
+    SDL_GPUBlitInfo blit{};
+    blit.source.texture = m_dogsTexture;
+    blit.source.w = m_dogsW;
+    blit.source.h = m_dogsH;
+    blit.destination.texture = backbuffer;
+    blit.destination.x = 100;
+    blit.destination.y = 100;
+    blit.destination.w = m_dogsW;
+    blit.destination.h = m_dogsH;
+    blit.filter = SDL_GPU_FILTER_LINEAR;
+    SDL_BlitGPUTexture(test_cmdbuff, &blit);
+    //dogsEnd
 
     SDL_EndGPURenderPass(test_rp);
     SDL_SubmitGPUCommandBuffer(test_cmdbuff);
