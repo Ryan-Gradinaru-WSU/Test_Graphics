@@ -15,6 +15,10 @@ public:
     SDL_GPUTexture* m_dogsTexture = nullptr;
     int m_dogsW = 0;
     int m_dogsH = 0;
+    SDL_GPUGraphicsPipeline* m_pipeline = nullptr;
+
+    SDL_GPUSampler* m_dogsSampler = nullptr;
+    SDL_GPUBuffer* m_quadBuffer;
     //Tests-dogs.png
 
 
