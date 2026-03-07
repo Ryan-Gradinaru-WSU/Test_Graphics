@@ -1,8 +1,12 @@
 #include "./../../headers/Window/BaseSDL.h"
+#include <SDL3/SDL_filesystem.h>
 #include <SDL3/SDL_gpu.h>
 #include <SDL3/SDL_pixels.h>
 #include <SDL3/SDL_render.h>
+#include <SDL3/SDL_surface.h>
 #include <SDL3/SDL_video.h>
+//for dogs
+//#include <SDL3_image/SDL_image.h>
 
 #define WINDOW_WIDTH    1280
 #define WINDOW_HEIGHT   800
@@ -10,18 +14,23 @@
 
 BaseSDL::BaseSDL( Uint32 flags )
 {
+
+    // CREATE DEVICE
+
+    DEBUG_PRINT("DEVICE INIT START!");
+
     if(!SDL_Init(flags))
     {
         throw InitError();
     }
-    DEBUG_PRINT("SDL_INIT SUCCESS!");
+    DEBUG_PRINT("   SDL_INIT SUCCESS!");
 
     m_window = SDL_CreateWindow("fortnite", WINDOW_WIDTH, WINDOW_HEIGHT, 0);
     if (!m_window)
     {
         throw InitError();
     }
-    DEBUG_PRINT("WINDOW CREATION SUCCESS!");
+    DEBUG_PRINT("   WINDOW CREATION SUCCESS!");
 
 
     m_gpuDevice = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL, true, NULL);
@@ -31,7 +40,7 @@ BaseSDL::BaseSDL( Uint32 flags )
     {
         throw InitError();
     }
-    DEBUG_PRINT("GPU DEVICE CREATION SUCCESS!");
+    DEBUG_PRINT("   GPU DEVICE CREATION SUCCESS!");
 
     if(!runInitTests()){
         DEBUG_PRINT("TESTS FAILED!");
@@ -42,8 +51,319 @@ BaseSDL::BaseSDL( Uint32 flags )
     if(!SDL_ClaimWindowForGPUDevice(m_gpuDevice, m_window)){
         throw InitError();
     }
-    DEBUG_PRINT("GPU BIND SUCCESS!");
+    DEBUG_PRINT("   GPU BIND SUCCESS!");
+
+    DEBUG_PRINT("DEVICE INIT SUCCESS!");
+
+    // -----------------------------------------
+    //          DEBUG - REMOVE LATER
+    // -----------------------------------------
+    //LOAD PNG
+    DEBUG_PRINT("PNG LOADING START!");
+    //load image as raw surface
+    SDL_Surface* raw_surface = SDL_LoadPNG("../resources/dog.png"); // pull surface from dog.png in resoruces
+
+    if (!raw_surface){
+        throw InitError();
+    }
+    DEBUG_PRINT("   LOADED RAW PNG!");
+    
+    //convert surface to usable format
+    SDL_Surface* surface = SDL_ConvertSurface(raw_surface, SDL_PIXELFORMAT_RGBA32);
+
+    if (!surface){
+        throw InitError();
+    }
+
+    //destroy unusable surface
+    SDL_DestroySurface(raw_surface);
+
+    DEBUG_PRINT("   CONVERSION SUCCESS!");
+
+    m_dogsW = surface->w;
+    m_dogsH = surface->h;
+    
+    //create gpu specific texture 
+
+    SDL_GPUTextureCreateInfo texinfo{};
+        texinfo.type = SDL_GPU_TEXTURETYPE_2D;
+        texinfo.format = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
+        texinfo.width = m_dogsW;
+        texinfo.height = m_dogsH;
+        texinfo.num_levels = 1;
+        texinfo.layer_count_or_depth = 1;
+        texinfo.usage = SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ;
+    
+    m_dogsTexture = SDL_CreateGPUTexture(m_gpuDevice, &texinfo);
+
+    if (!m_dogsTexture){
+        throw InitError();
+    }
+    DEBUG_PRINT("   TEXTURE CREATED SUCCESSFULLY!");
+
+    DEBUG_PRINT("PNG LOADED SUCCESSFULLY!");
+
+    DEBUG_PRINT("GPU UPLOAD START!");
+    
+    //set up variables needed for upload
+    size_t uploadSize = surface->pitch * surface->h;
+
+    SDL_GPUTransferBufferCreateInfo transferInfo{};
+        transferInfo.size = uploadSize;
+        transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    
+    SDL_GPUTransferBuffer* staging = SDL_CreateGPUTransferBuffer(
+        m_gpuDevice,
+        &transferInfo
+    );
+    
+    if (!staging){
+        throw InitError();
+    }
+    DEBUG_PRINT("   INTERMEDIATE STAGING SUCCESS!");
+
+
+    
+    void* map = SDL_MapGPUTransferBuffer(m_gpuDevice, staging, false);
+
+    if (!map){
+        throw InitError();
+    }
+    DEBUG_PRINT("   MAP TRANSFER SUCCESS!");
+
+    SDL_memcpy(map, surface->pixels, uploadSize);
+    SDL_UnmapGPUTransferBuffer(m_gpuDevice, staging);
+
+    //UPLOAD TEXTURE
+    SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(m_gpuDevice);
+    SDL_GPUCopyPass* copy = SDL_BeginGPUCopyPass(cmd);
+
+    SDL_GPUTextureTransferInfo src{};
+        src.transfer_buffer = staging;
+        src.offset = 0;
+        src.pixels_per_row = surface->pitch / 4;
+        src.rows_per_layer = surface->h;
+
+
+    SDL_GPUTextureRegion dst{};
+        dst.texture = m_dogsTexture;
+        dst.x = 0;
+        dst.y = 0;
+        dst.z = 0;
+        dst.w = surface->w;
+        dst.h = surface->h;
+        dst.d = 1;
+        dst.layer = 0;
+        dst.mip_level = 0;
+    
+    SDL_UploadToGPUTexture(copy, &src, &dst, false);
+
+    if (!map){
+        throw InitError();
+    }
+    DEBUG_PRINT("   TEXTURE UPLOAD SUCCESS!");
+
+    SDL_EndGPUCopyPass(copy);
+    SDL_SubmitGPUCommandBuffer(cmd);
+
+    SDL_GPUSamplerCreateInfo sampInfo{};
+    sampInfo.min_filter = SDL_GPU_FILTER_LINEAR;
+    sampInfo.mag_filter = SDL_GPU_FILTER_LINEAR;
+    sampInfo.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+    sampInfo.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    sampInfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    sampInfo.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+
+    m_dogsSampler = SDL_CreateGPUSampler(m_gpuDevice, &sampInfo);
+
+
+    DEBUG_PRINT("GPU UPLOAD SUCCESS!");
+
+    
+    SDL_DestroySurface(surface);
+    
+    //LOAD SHADERS
+    DEBUG_PRINT("SHADER LOADING START!");
+    size_t file_size;
+
+    void* vert_code = SDL_LoadFile("../shaders/compiled/vulkan/textured.vert.spv", &file_size);
+    if (!vert_code){
+        throw InitError();
+    }
+    DEBUG_PRINT("   VERTEX SHADER FILE FOUND!");
+
+    SDL_GPUShaderCreateInfo vertInfo{};
+        vertInfo.code_size = file_size;
+        vertInfo.code = (Uint8*)vert_code;
+        vertInfo.entrypoint = "main";
+        vertInfo.format = SDL_GPU_SHADERFORMAT_SPIRV;
+        vertInfo.stage = SDL_GPU_SHADERSTAGE_VERTEX;
+
+    SDL_GPUShader* vertex_shader = SDL_CreateGPUShader(m_gpuDevice, &vertInfo);
+
+    if (!vertex_shader){
+        throw InitError();
+    }
+    DEBUG_PRINT("   VERTEX SHADER CREATED!");
+
+    void* frag_code = SDL_LoadFile("../shaders/compiled/vulkan/textured.frag.spv", &file_size);
+
+    if (!frag_code){
+        throw InitError();
+    }
+    DEBUG_PRINT("   FRAGMENT SHADER FILE FOUND!");
+    
+    SDL_GPUShaderCreateInfo fragInfo{};
+        fragInfo.code_size = file_size;
+        fragInfo.code = (Uint8*)frag_code;
+        fragInfo.entrypoint = "main";
+        fragInfo.format = SDL_GPU_SHADERFORMAT_SPIRV;
+        fragInfo.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
+        fragInfo.num_samplers = 1;
+
+    SDL_GPUShader* fragment_shader = SDL_CreateGPUShader(m_gpuDevice, &fragInfo);
+    
+    if (!fragment_shader){
+        throw InitError();
+    }
+    DEBUG_PRINT("   FRAGMENT SHADER CREATED!");
+
+    SDL_free(vert_code);
+    SDL_free(frag_code);
+
+    DEBUG_PRINT("SHADERS LOADED!");
+
+    //set up pipeline
+    DEBUG_PRINT("PIPELINE CREATION START!");
+
+    DEBUG_PRINT("   SET UP VERTEX ATTRIBUTES!");
+
+    SDL_GPUVertexAttribute vertex_attributes[2]{};
+        vertex_attributes[0].buffer_slot = 0;
+        vertex_attributes[0].location = 0;
+        vertex_attributes[0].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
+        vertex_attributes[0].offset = 0;
+        DEBUG_PRINT("       POSITION SET UP!");
+
+        vertex_attributes[1].buffer_slot = 0;
+        vertex_attributes[1].location = 1;
+        vertex_attributes[1].format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2;
+        vertex_attributes[1].offset = sizeof(float) * 2;
+        DEBUG_PRINT("       UV SET UP!");
+
+    SDL_GPUVertexBufferDescription vertex_buffer_desc[1]{};
+        vertex_buffer_desc[0].slot = 0;
+        vertex_buffer_desc[0].input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX;
+        vertex_buffer_desc[0].instance_step_rate = 0;
+        vertex_buffer_desc[0].pitch = sizeof(float) * 4;
+        DEBUG_PRINT("       BUFFER SET UP!");
+
+    SDL_GPUVertexInputState vertex_input{};
+        vertex_input.vertex_buffer_descriptions = vertex_buffer_desc;
+        vertex_input.num_vertex_buffers = 1;
+        vertex_input.vertex_attributes = vertex_attributes;
+        vertex_input.num_vertex_attributes = 2;
+        DEBUG_PRINT("       INPUT SET UP!");
+
+    DEBUG_PRINT("   SET UP PIPELINE INFO!");
+    SDL_GPUGraphicsPipelineCreateInfo pipeline_info{};
+        pipeline_info.vertex_shader = vertex_shader;
+        pipeline_info.fragment_shader = fragment_shader;
+        pipeline_info.vertex_input_state = vertex_input;
+        pipeline_info.primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST;
+    
+    DEBUG_PRINT("   SET UP COLOR TARGET INFO!");
+    SDL_GPUColorTargetDescription color_target{};
+        color_target.format = SDL_GetGPUSwapchainTextureFormat(m_gpuDevice, m_window);
+        
+
+    pipeline_info.target_info.num_color_targets = 1;
+    pipeline_info.target_info.color_target_descriptions = &color_target;
+    
+    SDL_GPUGraphicsPipelineTargetInfo target_info{};
+        target_info.color_target_descriptions = &color_target;
+        target_info.num_color_targets = 1;
+        target_info.has_depth_stencil_target = false;
+
+    pipeline_info.target_info = target_info;
+
+    m_pipeline = SDL_CreateGPUGraphicsPipeline(m_gpuDevice, &pipeline_info);
+    
+    if (!m_pipeline){
+        throw InitError();
+    }
+    DEBUG_PRINT("PIPELINE CREATED SUCCESSFULLY!");
+
+
+    //create GPU vertex buffer
+
+    DEBUG_PRINT("CREATING AND UPLOADING VERTEX BUFFER!");
+    float quad_verts[] = {
+        -0.5f, -0.5f, 0.0f, 1.0f, 
+        0.5f, -0.5f, 1.0f, 1.0f, 
+        0.5f, 0.5f, 1.0f, 0.0f, 
+
+        -0.5f, -0.5f, 0.0f, 1.0f, 
+        0.5f, 0.5f, 1.0f, 0.0f, 
+        -0.5f, 0.5f, 0.0f, 0.0f, 
+    };
+    size_t quadSize = sizeof(quad_verts);
+
+    SDL_GPUBufferCreateInfo vbufInfo{};
+        vbufInfo.size = sizeof(quad_verts);
+        vbufInfo.usage = SDL_GPU_BUFFERUSAGE_VERTEX;
+        vbufInfo.props = 0;
+
+    m_quadBuffer = SDL_CreateGPUBuffer(m_gpuDevice, &vbufInfo);
+
+
+    SDL_GPUTransferBufferCreateInfo tinfo{};
+        tinfo.size  = quadSize;
+        tinfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+    
+    SDL_GPUTransferBuffer* quad_staging = SDL_CreateGPUTransferBuffer(m_gpuDevice, &tinfo);
+    if (!quad_staging) {
+        throw InitError();
+    }
+    DEBUG_PRINT("QUAD STAGED SUCCESSFULLY!");
+
+    void* ptr = SDL_MapGPUTransferBuffer(m_gpuDevice, quad_staging, false);
+    memcpy(ptr, quad_verts, quadSize);
+    SDL_UnmapGPUTransferBuffer(m_gpuDevice, quad_staging);
+
+    SDL_GPUCommandBuffer* quad_cmd = SDL_AcquireGPUCommandBuffer(m_gpuDevice);
+    SDL_GPUCopyPass* quad_copy = SDL_BeginGPUCopyPass(quad_cmd);
+
+
+    SDL_GPUTransferBufferLocation quad_src{};
+        quad_src.transfer_buffer = quad_staging;
+        quad_src.offset = 0;
+
+    SDL_GPUBufferRegion quad_dst{};
+        quad_dst.buffer = m_quadBuffer;
+        quad_dst.offset = 0;
+        quad_dst.size   = quadSize;
+
+
+    SDL_UploadToGPUBuffer(quad_copy, &quad_src, &quad_dst, false);
+
+    SDL_EndGPUCopyPass(quad_copy);
+    SDL_SubmitGPUCommandBuffer(quad_cmd);
+
+    /*
+    void* temp_ptr = SDL_MapGPUTransferBuffer(m_gpuDevice, quad_staging, false);
+    float* f = (float*)temp_ptr;
+
+    for (int i = 0; i < 24; i++) {
+        printf("%f\n", f[i]);
+    }
+
+    SDL_UnmapGPUTransferBuffer(m_gpuDevice, quad_staging);
+    */
+
+    DEBUG_PRINT("CREATING AND UPLOADING VERTEX BUFFER SUCCESS!");
 }
+
 
 BaseSDL::~BaseSDL()
 {
@@ -120,6 +440,26 @@ void BaseSDL::draw()
     if(!test_rp){
         throw InitError();
     }
+
+    SDL_BindGPUGraphicsPipeline(test_rp, m_pipeline);
+
+    SDL_GPUBufferBinding vbind{};
+    vbind.buffer = m_quadBuffer;
+    vbind.offset = 0;
+    SDL_BindGPUVertexBuffers(test_rp, 0, &vbind, 1);
+
+    // Bind sampler + texture (no texture view object in SDL3)
+    SDL_GPUTextureSamplerBinding binding{};
+    binding.texture = m_dogsTexture;
+    binding.sampler = m_dogsSampler;
+
+    //printf("tex = %p, sampler = %p\n", (void*)m_dogsTexture, (void*)m_dogsSampler);
+
+
+    SDL_BindGPUFragmentSamplers(test_rp, 0, &binding, 1);
+
+    SDL_DrawGPUPrimitives(test_rp, 6, 1, 0, 0);
+
 
     SDL_EndGPURenderPass(test_rp);
     SDL_SubmitGPUCommandBuffer(test_cmdbuff);
