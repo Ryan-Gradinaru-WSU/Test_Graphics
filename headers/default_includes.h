@@ -7,6 +7,7 @@
 #include <math.h>
 #include <sstream>
 #include <cmath>
+#include <vector>
 
 //dependencies
 #include <SDL3/SDL.h>

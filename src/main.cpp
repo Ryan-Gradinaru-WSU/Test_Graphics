@@ -2,9 +2,12 @@
 #include <SDL3/SDL_error.h>
 #include <SDL3/SDL_gpu.h>
 #include <SDL3/SDL_init.h>
+#include <SDL3/SDL_log.h>
 
 int main(int argc, char* argv[])
 {
+    SDL_SetLogPriorities(SDL_LOG_PRIORITY_TRACE);
+
     bool quit = false;
 
     DEBUG_PRINT("SDL3 lib path: " << SDL_GetBasePath());
