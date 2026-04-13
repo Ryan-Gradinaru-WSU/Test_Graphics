@@ -43,23 +43,25 @@ BaseSDL::BaseSDL( Uint32 flags )
 
     std::string default_driver =  SDL_GetGPUDriver(0);
     DEBUG_PRINT("YOUR DEFAULT DRIVER IS: " << default_driver);
-    uint shader_type = -1;
+    Uint32 shader_type = -1;
     std::string vert_shader_path = "";
     std::string frag_shader_path = "";
-
+    std::string dog_path = "";
+    
     if(default_driver == "vulkan"){
         shader_type = SDL_GPU_SHADERFORMAT_SPIRV;
         vert_shader_path = "../shaders/compiled/vulkan/textured.vert.spv";
         frag_shader_path = "../shaders/compiled/vulkan/textured.frag.spv";
-        
+        dog_path = "../resources/dog.png";
     }
 
     if(default_driver == "direct3d12"){
         shader_type = SDL_GPU_SHADERFORMAT_DXIL;
-        vert_shader_path = "../shaders/compiled/d3d12/textured.vert.cso";
-        frag_shader_path = "../shaders/compiled/d3d12/textured.frag.cso";
+        vert_shader_path = "../../shaders/compiled/d3d12/TexturedQuad.vert.dxil";
+        frag_shader_path = "../../shaders/compiled/d3d12/TexturedQuad.frag.dxil";
+        dog_path = "../../resources/dog.png";
     }
-
+    
     
     DEBUG_PRINT("CHOSEN VERTEX SHADER PATH: " << vert_shader_path);
     DEBUG_PRINT("CHOSEN FRAGMENT SHADER PATH: " << frag_shader_path);
@@ -93,7 +95,7 @@ BaseSDL::BaseSDL( Uint32 flags )
     //LOAD PNG
     DEBUG_PRINT("PNG LOADING START!");
     //load image as raw surface
-    SDL_Surface* raw_surface = SDL_LoadPNG("../resources/dog.png"); // pull surface from dog.png in resoruces
+    SDL_Surface* raw_surface = SDL_LoadPNG(dog_path.c_str()); // pull surface from dog.png in resoruces
 
     if (!raw_surface){
         throw InitError();
