@@ -609,6 +609,7 @@ void BaseSDL::draw()
 
 
     SDL_BindGPUFragmentSamplers(test_rp, 0, &binding, 1);
+    //SDL_PushGPUVertexUniformData()
 
     SDL_DrawGPUPrimitives(test_rp, 6, 1, 0, 0);
 
