@@ -447,13 +447,13 @@ BaseSDL::BaseSDL( Uint32 flags )
 
     DEBUG_PRINT("CREATING AND UPLOADING VERTEX BUFFER!");
     float quad_verts[] = {
-        -0.5f, -0.5f, 0.0f, 1.0f, 
-        0.5f, -0.5f, 1.0f, 1.0f, 
-        0.5f, 0.5f, 1.0f, 0.0f, 
+        -1.0f, -1.0f, 0.0f, 1.0f, 
+        1.0f, -1.0f, 1.0f, 1.0f, 
+        1.0f, 1.0f, 1.0f, 0.0f, 
 
-        -0.5f, -0.5f, 0.0f, 1.0f, 
-        0.5f, 0.5f, 1.0f, 0.0f, 
-        -0.5f, 0.5f, 0.0f, 0.0f, 
+        -1.0f, -1.0f, 0.0f, 1.0f, 
+        1.0f, 1.0f, 1.0f, 0.0f, 
+        -1.0f, 1.0f, 0.0f, 0.0f, 
     };
     size_t quadSize = sizeof(quad_verts);
 
