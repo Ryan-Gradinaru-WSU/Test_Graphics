@@ -4,6 +4,8 @@
 class Theater
 {
     public:
+        // default sampler
+        
         //DrawElements();
         //
         Theater();
