@@ -91,6 +91,9 @@ BaseSDL::BaseSDL( Uint32 flags )
     m_dogsTexture = UploadImage(dog_path.c_str(), m_gpuDevice);
 
     m_grassTexture = UploadImage("../../resources/grass.png", m_gpuDevice);
+
+    m_boxTexture = UploadImage("../../resources/box.png", m_gpuDevice);
+    m_boxRedTexture = UploadImage("../../resources/box_red.png", m_gpuDevice);
     
     SDL_GPUSamplerCreateInfo sampInfo{};
         sampInfo.min_filter = SDL_GPU_FILTER_LINEAR;
@@ -421,7 +424,40 @@ void BaseSDL::draw()
 
     SDL_DrawGPUPrimitives(test_rp, 6, 1, 0, 0);
 
-    //DRAW GRASS
+    // DRAW BOX
+
+    glm::mat4 box_model(1.0f);
+        box_model = glm::translate(box_model, glm::vec3(500, 500, 0.0f));
+        box_model = glm::scale(box_model, glm::vec3(64, 64, 1.0f));
+
+        glm::mat4 box_ortho = glm::ortho(
+            0.0f, (float)WINDOW_WIDTH,
+            (float)WINDOW_HEIGHT, 0.0f,
+            -1.0f, 1.0f
+        );
+
+    glm::mat4 box_mvp = box_ortho * box_model;
+
+    SDL_BindGPUVertexBuffers(test_rp, 0, &vbind, 1);
+
+    if(box_collide){
+        binding.texture = m_boxRedTexture;
+    }
+    else{
+        binding.texture = m_boxTexture;
+    }
+    
+    binding.sampler = m_dogsSampler;
+
+    //printf("tex = %p, sampler = %p\n", (void*)m_dogsTexture, (void*)m_dogsSampler);
+
+    
+    SDL_BindGPUFragmentSamplers(test_rp, 0, &binding, 1);
+    SDL_PushGPUVertexUniformData(test_cmdbuff, 0, &box_mvp, sizeof(glm::mat4));
+
+    SDL_DrawGPUPrimitives(test_rp, 6, 1, 0, 0);
+
+    //DRAW PERSON
 
     SDL_BindGPUVertexBuffers(test_rp, 0, &vbind, 1);
 

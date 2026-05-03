@@ -106,7 +106,20 @@ int main(void/*int argc, char* argv[]*/)
             b_sdl.m_tx += a_pressed * -3.0f;
             b_sdl.m_ty += s_pressed * 3.0f;
             b_sdl.m_tx += d_pressed * 3.0f;
-
+            
+            if(b_sdl.m_ty - (b_sdl.m_scaleY) < 0){
+                b_sdl.m_ty = b_sdl.m_scaleY;
+            }
+            if(b_sdl.m_tx - (b_sdl.m_scaleX) < 0){
+                b_sdl.m_tx = b_sdl.m_scaleX;
+            }
+            if(b_sdl.m_ty + (b_sdl.m_scaleY) > WINDOW_HEIGHT){
+                b_sdl.m_ty = WINDOW_HEIGHT - b_sdl.m_scaleY;
+            }
+            if(b_sdl.m_tx + (b_sdl.m_scaleX) > WINDOW_WIDTH){
+                b_sdl.m_tx = WINDOW_WIDTH - b_sdl.m_scaleX;
+            }
+            
             
             glm::mat4 model(1.0f);
             model = glm::translate(model, glm::vec3(b_sdl.m_tx, b_sdl.m_ty, 0.0f));
@@ -120,6 +133,16 @@ int main(void/*int argc, char* argv[]*/)
             );
 
             b_sdl.m_mvp = ortho * model;
+
+            
+            float deltaX = std::abs(b_sdl.m_tx - 500);
+            float deltaY = std::abs(b_sdl.m_ty - 500);
+
+            float sumHalfWidths = b_sdl.m_scaleX + 34;
+            float sumHalfHeights = b_sdl.m_scaleY + 34; 
+                
+
+            b_sdl.box_collide = (deltaX < sumHalfWidths) && (deltaY < sumHalfHeights);
 
             //TEMP REMOVE
             b_sdl.draw();

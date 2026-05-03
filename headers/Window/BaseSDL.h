@@ -15,9 +15,15 @@ public:
     //Tests-dogs.png
     SDL_GPUTexture* m_dogsTexture = nullptr;
     SDL_GPUTexture* m_grassTexture = nullptr;
+    SDL_GPUTexture* m_boxTexture = nullptr;
+    SDL_GPUTexture* m_boxRedTexture = nullptr;
+
+
     int m_dogsW = 0;
     int m_dogsH = 0;
     SDL_GPUGraphicsPipeline* m_pipeline = nullptr;
+
+    bool box_collide = false;
 
 
     float m_tx = 640;
