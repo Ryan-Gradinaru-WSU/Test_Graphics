@@ -6,6 +6,7 @@ project(app LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ---------------- Sources ----------------
 file(GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS src/*.cpp)
@@ -16,8 +17,10 @@ target_include_directories(app PRIVATE headers)
 
 # ---------------- SDL3 ----------------
 # Prefer config mode (Windows, vcpkg, MSYS2)
+find_package(glm CONFIG REQUIRED)
 find_package(SDL3 CONFIG REQUIRED)
 target_link_libraries(app PRIVATE SDL3::SDL3)
+target_link_libraries(app PRIVATE glm::glm)
 
 # ---------------- Vulkan ----------------
 if (UNIX AND NOT APPLE)

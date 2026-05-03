@@ -1,15 +1,11 @@
 #include "./../../headers/Window/BaseSDL.h"
-#include <SDL3/SDL_filesystem.h>
-#include <SDL3/SDL_gpu.h>
-#include <SDL3/SDL_pixels.h>
-#include <SDL3/SDL_render.h>
-#include <SDL3/SDL_surface.h>
-#include <SDL3/SDL_video.h>
+#include "../../headers/GPUUtils/imageloader.h"
+#include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
+
+
 //for dogs
 //#include <SDL3_image/SDL_image.h>
-
-#define WINDOW_WIDTH    1280
-#define WINDOW_HEIGHT   800
 
 
 BaseSDL::BaseSDL( Uint32 flags )
@@ -25,12 +21,43 @@ BaseSDL::BaseSDL( Uint32 flags )
     }
     DEBUG_PRINT("   SDL_INIT SUCCESS!");
 
-    m_window = SDL_CreateWindow("fortnite", WINDOW_WIDTH, WINDOW_HEIGHT, 0);
+    m_window = SDL_CreateWindow("Bold Game Engine", WINDOW_WIDTH, WINDOW_HEIGHT, 0);
     if (!m_window)
     {
         throw InitError();
     }
     DEBUG_PRINT("   WINDOW CREATION SUCCESS!");
+    
+    if(SDL_GetNumGPUDrivers() == 0){
+        throw InitError("NO GPU DRIVERS FOUND! TERMINATING!");
+    }
+    
+
+
+    std::string default_driver =  SDL_GetGPUDriver(0);
+    DEBUG_PRINT("YOUR DEFAULT DRIVER IS: " << default_driver);
+    int shader_type = -1;
+    std::string vert_shader_path = "";
+    std::string frag_shader_path = "";
+    std::string dog_path = "";
+    
+    if(default_driver == "vulkan"){
+        shader_type = SDL_GPU_SHADERFORMAT_SPIRV;
+        vert_shader_path = "../shaders/compiled/vulkan/textured.vert.spv";
+        frag_shader_path = "../shaders/compiled/vulkan/textured.frag.spv";
+        dog_path = "../resources/guy.png";
+    }
+
+    if(default_driver == "direct3d12"){
+        shader_type = SDL_GPU_SHADERFORMAT_DXIL;
+        vert_shader_path = "../../shaders/compiled/d3d12/TexturedQuad.vert.dxil";
+        frag_shader_path = "../../shaders/compiled/d3d12/TexturedQuad.frag.dxil";
+        dog_path = "../../resources/guy.png";
+    }
+    
+    
+    DEBUG_PRINT("CHOSEN VERTEX SHADER PATH: " << vert_shader_path);
+    DEBUG_PRINT("CHOSEN FRAGMENT SHADER PATH: " << frag_shader_path);
 
 
     m_gpuDevice = SDL_CreateGPUDevice(SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL, true, NULL);
@@ -60,133 +87,49 @@ BaseSDL::BaseSDL( Uint32 flags )
     // -----------------------------------------
     //LOAD PNG
     DEBUG_PRINT("PNG LOADING START!");
-    //load image as raw surface
-    SDL_Surface* raw_surface = SDL_LoadPNG("../resources/dog.png"); // pull surface from dog.png in resoruces
 
-    if (!raw_surface){
-        throw InitError();
-    }
-    DEBUG_PRINT("   LOADED RAW PNG!");
+    m_dogsTexture = UploadImage(dog_path.c_str(), m_gpuDevice);
+
+    m_grassTexture = UploadImage("../../resources/grass.png", m_gpuDevice);
+
+    m_boxTexture = UploadImage("../../resources/box.png", m_gpuDevice);
+    m_boxRedTexture = UploadImage("../../resources/box_red.png", m_gpuDevice);
     
-    //convert surface to usable format
-    SDL_Surface* surface = SDL_ConvertSurface(raw_surface, SDL_PIXELFORMAT_RGBA32);
-
-    if (!surface){
-        throw InitError();
-    }
-
-    //destroy unusable surface
-    SDL_DestroySurface(raw_surface);
-
-    DEBUG_PRINT("   CONVERSION SUCCESS!");
-
-    m_dogsW = surface->w;
-    m_dogsH = surface->h;
-    
-    //create gpu specific texture 
-
-    SDL_GPUTextureCreateInfo texinfo{};
-        texinfo.type = SDL_GPU_TEXTURETYPE_2D;
-        texinfo.format = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
-        texinfo.width = m_dogsW;
-        texinfo.height = m_dogsH;
-        texinfo.num_levels = 1;
-        texinfo.layer_count_or_depth = 1;
-        texinfo.usage = SDL_GPU_TEXTUREUSAGE_GRAPHICS_STORAGE_READ;
-    
-    m_dogsTexture = SDL_CreateGPUTexture(m_gpuDevice, &texinfo);
-
-    if (!m_dogsTexture){
-        throw InitError();
-    }
-    DEBUG_PRINT("   TEXTURE CREATED SUCCESSFULLY!");
-
-    DEBUG_PRINT("PNG LOADED SUCCESSFULLY!");
-
-    DEBUG_PRINT("GPU UPLOAD START!");
-    
-    //set up variables needed for upload
-    size_t uploadSize = surface->pitch * surface->h;
-
-    SDL_GPUTransferBufferCreateInfo transferInfo{};
-        transferInfo.size = uploadSize;
-        transferInfo.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-    
-    SDL_GPUTransferBuffer* staging = SDL_CreateGPUTransferBuffer(
-        m_gpuDevice,
-        &transferInfo
-    );
-    
-    if (!staging){
-        throw InitError();
-    }
-    DEBUG_PRINT("   INTERMEDIATE STAGING SUCCESS!");
-
-
-    
-    void* map = SDL_MapGPUTransferBuffer(m_gpuDevice, staging, false);
-
-    if (!map){
-        throw InitError();
-    }
-    DEBUG_PRINT("   MAP TRANSFER SUCCESS!");
-
-    SDL_memcpy(map, surface->pixels, uploadSize);
-    SDL_UnmapGPUTransferBuffer(m_gpuDevice, staging);
-
-    //UPLOAD TEXTURE
-    SDL_GPUCommandBuffer* cmd = SDL_AcquireGPUCommandBuffer(m_gpuDevice);
-    SDL_GPUCopyPass* copy = SDL_BeginGPUCopyPass(cmd);
-
-    SDL_GPUTextureTransferInfo src{};
-        src.transfer_buffer = staging;
-        src.offset = 0;
-        src.pixels_per_row = surface->pitch / 4;
-        src.rows_per_layer = surface->h;
-
-
-    SDL_GPUTextureRegion dst{};
-        dst.texture = m_dogsTexture;
-        dst.x = 0;
-        dst.y = 0;
-        dst.z = 0;
-        dst.w = surface->w;
-        dst.h = surface->h;
-        dst.d = 1;
-        dst.layer = 0;
-        dst.mip_level = 0;
-    
-    SDL_UploadToGPUTexture(copy, &src, &dst, false);
-
-    if (!map){
-        throw InitError();
-    }
-    DEBUG_PRINT("   TEXTURE UPLOAD SUCCESS!");
-
-    SDL_EndGPUCopyPass(copy);
-    SDL_SubmitGPUCommandBuffer(cmd);
-
     SDL_GPUSamplerCreateInfo sampInfo{};
-    sampInfo.min_filter = SDL_GPU_FILTER_LINEAR;
-    sampInfo.mag_filter = SDL_GPU_FILTER_LINEAR;
-    sampInfo.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
-    sampInfo.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-    sampInfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
-    sampInfo.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+        sampInfo.min_filter = SDL_GPU_FILTER_LINEAR;
+        sampInfo.mag_filter = SDL_GPU_FILTER_LINEAR;
+        sampInfo.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+
+        sampInfo.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+        sampInfo.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+        sampInfo.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+
+        sampInfo.mip_lod_bias = 0.0f;
+        sampInfo.min_lod = 0.0f;
+        sampInfo.max_lod = 1000.0f;
+
+        sampInfo.enable_anisotropy = false;
+        sampInfo.max_anisotropy = 1.0f;
+
+        sampInfo.enable_compare = false;
+        sampInfo.compare_op = SDL_GPU_COMPAREOP_ALWAYS;
+
+
+        sampInfo.props = 0;
 
     m_dogsSampler = SDL_CreateGPUSampler(m_gpuDevice, &sampInfo);
 
-
     DEBUG_PRINT("GPU UPLOAD SUCCESS!");
 
-    
-    SDL_DestroySurface(surface);
+    //printf("surface: %d x %d\n", surface->w, surface->h);
+
+    //SDL_DestroySurface(surface);
     
     //LOAD SHADERS
     DEBUG_PRINT("SHADER LOADING START!");
     size_t file_size;
 
-    void* vert_code = SDL_LoadFile("../shaders/compiled/vulkan/textured.vert.spv", &file_size);
+    void* vert_code = SDL_LoadFile(vert_shader_path.c_str(), &file_size);
     if (!vert_code){
         throw InitError();
     }
@@ -196,8 +139,9 @@ BaseSDL::BaseSDL( Uint32 flags )
         vertInfo.code_size = file_size;
         vertInfo.code = (Uint8*)vert_code;
         vertInfo.entrypoint = "main";
-        vertInfo.format = SDL_GPU_SHADERFORMAT_SPIRV;
+        vertInfo.format = shader_type;
         vertInfo.stage = SDL_GPU_SHADERSTAGE_VERTEX;
+        vertInfo.num_uniform_buffers = 1;
 
     SDL_GPUShader* vertex_shader = SDL_CreateGPUShader(m_gpuDevice, &vertInfo);
 
@@ -206,18 +150,19 @@ BaseSDL::BaseSDL( Uint32 flags )
     }
     DEBUG_PRINT("   VERTEX SHADER CREATED!");
 
-    void* frag_code = SDL_LoadFile("../shaders/compiled/vulkan/textured.frag.spv", &file_size);
+    void* frag_code = SDL_LoadFile(frag_shader_path.c_str(), &file_size);
 
     if (!frag_code){
         throw InitError();
     }
     DEBUG_PRINT("   FRAGMENT SHADER FILE FOUND!");
+
     
     SDL_GPUShaderCreateInfo fragInfo{};
         fragInfo.code_size = file_size;
         fragInfo.code = (Uint8*)frag_code;
         fragInfo.entrypoint = "main";
-        fragInfo.format = SDL_GPU_SHADERFORMAT_SPIRV;
+        fragInfo.format = shader_type;
         fragInfo.stage = SDL_GPU_SHADERSTAGE_FRAGMENT;
         fragInfo.num_samplers = 1;
 
@@ -280,12 +225,27 @@ BaseSDL::BaseSDL( Uint32 flags )
     pipeline_info.target_info.num_color_targets = 1;
     pipeline_info.target_info.color_target_descriptions = &color_target;
     
+    
     SDL_GPUGraphicsPipelineTargetInfo target_info{};
         target_info.color_target_descriptions = &color_target;
         target_info.num_color_targets = 1;
         target_info.has_depth_stencil_target = false;
 
     pipeline_info.target_info = target_info;
+
+    color_target.format = SDL_GetGPUSwapchainTextureFormat(m_gpuDevice, m_window);
+
+    color_target.blend_state.enable_blend = true;
+
+    color_target.blend_state.color_blend_op = SDL_GPU_BLENDOP_ADD;
+    color_target.blend_state.alpha_blend_op = SDL_GPU_BLENDOP_ADD;
+
+    color_target.blend_state.src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA;
+    color_target.blend_state.dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA;
+
+    color_target.blend_state.src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE;
+    color_target.blend_state.dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ZERO;
+    
 
     m_pipeline = SDL_CreateGPUGraphicsPipeline(m_gpuDevice, &pipeline_info);
     
@@ -299,15 +259,15 @@ BaseSDL::BaseSDL( Uint32 flags )
 
     DEBUG_PRINT("CREATING AND UPLOADING VERTEX BUFFER!");
     float quad_verts[] = {
-        -0.5f, -0.5f, 0.0f, 1.0f, 
-        0.5f, -0.5f, 1.0f, 1.0f, 
-        0.5f, 0.5f, 1.0f, 0.0f, 
+        -1.0f, -1.0f, 0.0f, 1.0f, 
+        1.0f, -1.0f, 1.0f, 1.0f, 
+        1.0f, 1.0f, 1.0f, 0.0f, 
 
-        -0.5f, -0.5f, 0.0f, 1.0f, 
-        0.5f, 0.5f, 1.0f, 0.0f, 
-        -0.5f, 0.5f, 0.0f, 0.0f, 
+        -1.0f, -1.0f, 0.0f, 1.0f, 
+        1.0f, 1.0f, 1.0f, 0.0f, 
+        -1.0f, 1.0f, 0.0f, 0.0f, 
     };
-    size_t quadSize = sizeof(quad_verts);
+    Uint32 quadSize = sizeof(quad_verts);
 
     SDL_GPUBufferCreateInfo vbufInfo{};
         vbufInfo.size = sizeof(quad_verts);
@@ -361,6 +321,9 @@ BaseSDL::BaseSDL( Uint32 flags )
     SDL_UnmapGPUTransferBuffer(m_gpuDevice, quad_staging);
     */
 
+    
+    
+
     DEBUG_PRINT("CREATING AND UPLOADING VERTEX BUFFER SUCCESS!");
 }
 
@@ -379,7 +342,7 @@ bool BaseSDL::runInitTests(){
     DEBUG_PRINT(supported_driver << " will be used on this machine!");
     
     if(SDL_GPUSupportsShaderFormats(SDL_GPU_SHADERFORMAT_SPIRV | SDL_GPU_SHADERFORMAT_DXIL, NULL))
-        DEBUG_PRINT("D3X12 shaders and Vulkan shaders supported!");
+        DEBUG_PRINT("D3D12 shaders and Vulkan shaders supported!");
     else{
         DEBUG_PRINT("ERROR - SHADERS NOT SUPPORTED.");
         return false;
@@ -448,15 +411,65 @@ void BaseSDL::draw()
     vbind.offset = 0;
     SDL_BindGPUVertexBuffers(test_rp, 0, &vbind, 1);
 
-    // Bind sampler + texture (no texture view object in SDL3)
+    glm::mat4 model = glm::mat4(1.0f);   // identity
     SDL_GPUTextureSamplerBinding binding{};
-    binding.texture = m_dogsTexture;
-    binding.sampler = m_dogsSampler;
+        binding.texture = m_grassTexture;
+        binding.sampler = m_dogsSampler;
 
     //printf("tex = %p, sampler = %p\n", (void*)m_dogsTexture, (void*)m_dogsSampler);
 
 
     SDL_BindGPUFragmentSamplers(test_rp, 0, &binding, 1);
+    SDL_PushGPUVertexUniformData(test_cmdbuff, 0, &model, sizeof(glm::mat4));
+
+    SDL_DrawGPUPrimitives(test_rp, 6, 1, 0, 0);
+
+    // DRAW BOX
+
+    glm::mat4 box_model(1.0f);
+        box_model = glm::translate(box_model, glm::vec3(500, 500, 0.0f));
+        box_model = glm::scale(box_model, glm::vec3(64, 64, 1.0f));
+
+        glm::mat4 box_ortho = glm::ortho(
+            0.0f, (float)WINDOW_WIDTH,
+            (float)WINDOW_HEIGHT, 0.0f,
+            -1.0f, 1.0f
+        );
+
+    glm::mat4 box_mvp = box_ortho * box_model;
+
+    SDL_BindGPUVertexBuffers(test_rp, 0, &vbind, 1);
+
+    if(box_collide){
+        binding.texture = m_boxRedTexture;
+    }
+    else{
+        binding.texture = m_boxTexture;
+    }
+    
+    binding.sampler = m_dogsSampler;
+
+    //printf("tex = %p, sampler = %p\n", (void*)m_dogsTexture, (void*)m_dogsSampler);
+
+    
+    SDL_BindGPUFragmentSamplers(test_rp, 0, &binding, 1);
+    SDL_PushGPUVertexUniformData(test_cmdbuff, 0, &box_mvp, sizeof(glm::mat4));
+
+    SDL_DrawGPUPrimitives(test_rp, 6, 1, 0, 0);
+
+    //DRAW PERSON
+
+    SDL_BindGPUVertexBuffers(test_rp, 0, &vbind, 1);
+
+
+    binding.texture = m_dogsTexture;
+    binding.sampler = m_dogsSampler;
+
+    //printf("tex = %p, sampler = %p\n", (void*)m_dogsTexture, (void*)m_dogsSampler);
+
+    
+    SDL_BindGPUFragmentSamplers(test_rp, 0, &binding, 1);
+    SDL_PushGPUVertexUniformData(test_cmdbuff, 0, &m_mvp, sizeof(glm::mat4));
 
     SDL_DrawGPUPrimitives(test_rp, 6, 1, 0, 0);
 

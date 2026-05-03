@@ -7,9 +7,13 @@
 #include <math.h>
 #include <sstream>
 #include <cmath>
+#include <vector>
 
 //dependencies
 #include <SDL3/SDL.h>
+
+#define WINDOW_WIDTH    1280
+#define WINDOW_HEIGHT   800
 
 #ifndef ENABLE_DEBUG_TEXT
 #define ENABLE_DEBUG_TEXT
